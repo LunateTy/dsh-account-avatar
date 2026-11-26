@@ -78,8 +78,9 @@ dsh plugin --profile web add /path/to/dsh-account-avatar
 
 - `$DSH_HOME/account-avatar/avatars.json` —— 整个图库（最多 100 张），由 Host 半边通过 `GET/POST /account-avatar/api/state|mutate` 和 `GET /account-avatar/api/image` 读写，三条路由都过了和官方本机路由同一套 `connection.requestRejection` 检查
 - `localStorage['dsh.account-avatar.v2']` —— 当前那张的浏览器副本，保证首帧就画对
+- `localStorage['dsh.account-avatar.shape.v2']` —— 形状的浏览器副本
 - `localStorage['dsh.account-avatar.name.v1']` —— 自定义名字的浏览器副本
-- `localStorage['dsh.avatar-studio.account.v1']`（沿用）—— 从设置「账号与余额」页抓到的账号名缓存
+- `localStorage['dsh.account-avatar.account.v1']` —— 从设置「账号与余额」页抓到的账号名缓存
 
 每张图存两份：256×256 原图（显示用，通常 20–60 KB）和 96×96 缩略图（历史列表用，约 4 KB），所以打开设置不用把整库原图都拉下来。图片只在本机处理，不上传任何服务器。
 

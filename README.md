@@ -78,8 +78,9 @@ If another plugin (Claude Style, for instance) also rewrites that label, Setting
 
 - `$DSH_HOME/account-avatar/avatars.json` — the whole library (up to 100 pictures). The Host half reads and writes it through `GET/POST /account-avatar/api/state|mutate` plus `GET /account-avatar/api/image`, all passing the same `connection.requestRejection` check the shipped loopback routes use.
 - `localStorage['dsh.account-avatar.v2']` — browser copy of the current picture, so the first painted frame is already right.
+- `localStorage['dsh.account-avatar.shape.v2']` — browser copy of the shape.
 - `localStorage['dsh.account-avatar.name.v1']` — browser copy of the custom name.
-- `localStorage['dsh.avatar-studio.account.v1']` (carried over) — cached account name, learned from the Settings account panel.
+- `localStorage['dsh.account-avatar.account.v1']` — cached account name, learned from the Settings account panel.
 
 Each picture is kept twice: a 256×256 original (for display, usually 20–60 KB) and a 96×96 thumbnail (for the list, about 4 KB), so opening Settings does not pull the whole library. Nothing is uploaded anywhere.
 
