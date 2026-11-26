@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Avatar personnalisé",
+    "description": "Remplace l'avatar de la barre latérale par le vôtre : importez, recadrez, il reste.",
+    "detail": "docs/DETAIL.md"
+  }
+}

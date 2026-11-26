@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "自定义头像",
+    "description": "在设置里上传一张自己的图，替换左侧栏底部的头像；只在这台电脑上生效。",
+    "detail": "docs/DETAIL.md"
+  }
+}
