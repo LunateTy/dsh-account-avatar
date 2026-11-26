@@ -1,48 +1,48 @@
 {
-  "name": "dsh-account-avatar",
-  "version": "0.1.0",
-  "type": "module",
-  "description": "Replaces the sidebar account avatar with your own picture: upload, crop, and it is stored on this machine. The account menu, sign-in and notifications stay untouched.",
-  "license": "MIT",
-  "author": "LunateTy",
-  "keywords": [
-    "dsh",
-    "dsh-plugin",
-    "deepseek-harness",
-    "avatar",
-    "profile-picture",
-    "sidebar",
-    "customization"
-  ],
-  "homepage": "https://github.com/LunateTy/dsh-account-avatar#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LunateTy/dsh-account-avatar.git"
-  },
-  "bugs": {
-    "url": "https://github.com/LunateTy/dsh-account-avatar/issues"
-  },
-  "exports": {
-    ".": "./index.js",
-    "./client": "./client.js",
-    "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
-  },
-  "files": [
-    "index.js",
-    "client.js",
-    "cordis.patch.yml",
-    "locale/*.json",
-    "docs",
-    "icon.svg"
-  ],
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "immediately": true
-    }
-  }
+    "name":  "dsh-account-avatar",
+    "version":  "0.2.0",
+    "type":  "module",
+    "description":  "Replaces the sidebar account avatar with your own picture and name: upload, crop, keep a history of up to 100, pick a shape. Stored on this machine; the account menu, sign-in and notifications stay untouched.",
+    "license":  "MIT",
+    "author":  "LunateTy",
+    "keywords":  [
+                     "dsh",
+                     "dsh-plugin",
+                     "deepseek-harness",
+                     "avatar",
+                     "profile-picture",
+                     "sidebar",
+                     "customization"
+                 ],
+    "homepage":  "https://github.com/LunateTy/dsh-account-avatar#readme",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/LunateTy/dsh-account-avatar.git"
+                   },
+    "bugs":  {
+                 "url":  "https://github.com/LunateTy/dsh-account-avatar/issues"
+             },
+    "exports":  {
+                    ".":  "./index.js",
+                    "./client":  "./client.js",
+                    "./locale/*.json":  "./locale/*.json",
+                    "./icon":  "./icon.svg"
+                },
+    "files":  [
+                  "index.js",
+                  "client.js",
+                  "cordis.patch.yml",
+                  "locale/*.json",
+                  "docs",
+                  "icon.svg"
+              ],
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           },
+                "client":  {
+                               "platform":  "web",
+                               "immediately":  true
+                           }
+            }
 }

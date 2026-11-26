@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Custom avatar",
-    "description": "Upload your own picture in Settings to replace the avatar at the bottom of the sidebar. Local to this computer.",
+    "description": "Upload your own picture in Settings to replace the avatar at the bottom of the sidebar, with a history of up to 100 pictures and circle / rounded / square shapes. Local to this computer.",
     "detail": "docs/DETAIL.md"
   }
 }
