@@ -1,12 +1,12 @@
 # dsh-account-avatar
 
-Replaces the avatar at the bottom of the DeepSeek Harness sidebar with your own picture — and lets you give yourself a name.
+Replaces the avatar at the bottom of the DeepSeek Harness sidebar with a picture you upload, and lets you set your own nickname.
 
 ## Why
 
 The sidebar shows whatever your DeepSeek account says. Sign in with WeChat, or bind WeChat to the account, and that is your WeChat profile picture — and while the account is signed in that way, DSH offers no separate avatar setting.
 
-DSH has no setting for this: the seat reads `AccountProfile.avatarUrl`, which is read-only, and the account service exposes no setter. This plugin paints your own picture and name over that one element, on this machine only.
+DSH has no setting for this: the seat reads `AccountProfile.avatarUrl`, which is read-only, and the account service exposes no setter. This plugin paints your own picture and name over that one element, on this device only.
 
 ## Install
 
@@ -32,7 +32,7 @@ Open **Settings** (`Ctrl+Alt+,`, or click the sidebar avatar → Settings) → *
 2. Drag to reposition, scroll or use the slider to zoom
 3. **Save**
 
-The picture is stored as 256×256 and processed on this machine only.
+The picture is stored as 256×256 and processed on this device only.
 
 ### History
 
