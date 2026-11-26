@@ -4,7 +4,7 @@ Replaces the avatar at the bottom of the DeepSeek Harness sidebar with your own 
 
 ## Why
 
-The sidebar avatar is whatever your DeepSeek account says it is. With a WeChat sign-in that is your WeChat profile picture — which is rarely the face you want while working, but changing it changes it everywhere, including where colleagues and clients look.
+The sidebar avatar is whatever your DeepSeek account says it is. When you sign in with WeChat, or have WeChat bound to the account, that is your WeChat profile picture — and while the account is signed in through WeChat, the DSH avatar cannot be changed on its own.
 
 DSH has no setting for this: the launcher reads `AccountProfile.avatarUrl`, which is read-only, and the account service exposes no setter. This plugin paints your own image over that element and leaves every other part of the launcher alone.
 

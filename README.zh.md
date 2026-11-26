@@ -1,13 +1,11 @@
 # dsh-account-avatar
 
-把 DeepSeek Harness 左侧栏最下面那个头像，换成你自己上传的图。设置里传一张，拖一拖裁成方形，之后一直在 —— 刷新、重启浏览器、换端口都不丢。账号菜单本身完全不动：设置、意见反馈、退出登录、通知和额度提醒都保持原样。
+把 DeepSeek Harness 左侧栏最下面那个头像，换成自定义上传的图片。在设置里上传一张图片，拖动调整裁成方形，并且保存 —— 刷新、重启浏览器、换端口都不丢。账号菜单本身完全不动：设置、意见反馈、退出登录、通知和额度提醒都保持原样。
 
 ## 为什么做这个
 
-左下角显示的是 DeepSeek 平台账号的头像。用微信登录的话就是微信头像 —— 上班时不太像你想呈现的自己，但去平台改一下，同事、客户、家人那边看到的也一起变了。
-
-DSH 自己没有这个开关：那个位置读的是 `AccountProfile.avatarUrl`，只读，账号服务也没有任何设置接口。这个插件只在自己的机器上盖一层图，账号菜单的其余部分一概不碰。
-
+左下角显示的是 DeepSeek 平台账号的头像。用微信登录或者绑定微信的情况下就是微信头像 —— 在微信登录的时候无法单独修改dsh头像。
+DSH 本身没有这个选项：那个位置读的是 `AccountProfile.avatarUrl`，只读，账号服务也没有任何设置接口。这个插件只在自己的机器上盖一层图。
 ## 安装
 
 ```sh
@@ -25,7 +23,7 @@ dsh plugin --profile web add dsh-account-avatar
 
 **换一张**替换当前图片，**恢复默认**回到账号原来的头像。
 
-## 存在哪里
+## 存放位置
 
 - `$DSH_HOME/account-avatar/avatar.json` —— 持久副本。Host 半边通过 `GET/POST /account-avatar/api/state|avatar` 读写，两条路由都过了和官方本机路由同一套 `connection.requestRejection` 检查。
 - `localStorage['dsh.account-avatar.v1']` —— 浏览器侧的副本，让第一帧就显示你的图，不会先闪一下账号头像。
