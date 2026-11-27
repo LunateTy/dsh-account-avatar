@@ -31,12 +31,18 @@
     "files":  [
                   "index.js",
                   "client.js",
+                  "src",
+                  "build.mjs",
                   "cordis.patch.yml",
                   "locale/*.json",
                   "docs",
                   "assets/panel-*.png",
                   "icon.svg"
               ],
+    "scripts":  {
+                    "build":  "node build.mjs",
+                    "check":  "node build.mjs --check"
+                },
     "dsh":  {
                 "bundle":  {
                                "patch":  "./cordis.patch.yml"

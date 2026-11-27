@@ -1,5 +1,5 @@
 /**
- * Browser half of the avatar studio bundle.
+ * Browser half of the account avatar bundle.
  *
  * Adds a "Profile picture" page to Settings and repaints the sidebar account
  * launcher's avatar with the user's own image. The launcher seat itself stays
@@ -10,6 +10,7 @@
 window.__ModuleLoader__.load({
   id: 'dsh-account-avatar',
   factory(require) {
+// ═══ 00-bootstrap.js · React handles, module constants and the mutable state they describe.
     const React = require('react')
     const h = React.createElement
     const { useCallback, useEffect, useMemo, useRef, useState } = React
@@ -78,6 +79,7 @@ window.__ModuleLoader__.load({
     let repaintHits = 0
     let repaintLastAt = 0
 
+// ═══ 10-seat.js · Everything drawn on the sidebar: the cached name, the signed-out seat, and the marker that lets one stylesheet repaint the avatar.
     function readNameCache() {
       try {
         return window.localStorage.getItem(NAME_KEY) ?? ''
@@ -371,6 +373,7 @@ window.__ModuleLoader__.load({
       window.setTimeout(() => { retryLauncherSeat(onReady, attempts - 1) }, 300)
     }
 
+// ═══ 20-i18n.js · The eight dictionaries, the scoped stylesheet, and the translator that resolves one string.
     const dictionaries = {
       zh: {
         sectionLabel: '头像',
@@ -559,6 +562,7 @@ window.__ModuleLoader__.load({
       return makeTranslator(t)('signedOutName')
     }
 
+// ═══ 30-store.js · Persistence: shape and picture caches, the Host routes, the browser-local library that stands in for them, and thumbnail generation.
     function clamp(value, min, max) {
       return value < min ? min : value > max ? max : value
     }
@@ -865,6 +869,7 @@ window.__ModuleLoader__.load({
       return result.ok ? result.state : state
     }
 
+// ═══ 40-crop.js · The crop dialog: drag, zoom, and the canvas write that produces the 256px picture.
     function readFileAsDataUrl(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader()
@@ -1034,6 +1039,7 @@ window.__ModuleLoader__.load({
       )
     }
 
+// ═══ 50-settings.js · The Settings card: name editing, shape choice, the history grid, and bulk selection.
     function AvatarSection(props) {
       const tr = useMemo(() => makeTranslator(props.t), [props.t])
       const [model, setModel] = useState(() => ({
@@ -1493,6 +1499,7 @@ window.__ModuleLoader__.load({
       )
     }
 
+// ═══ 60-paint.js · The one stylesheet that repaints the launcher avatar, and the call that applies it.
     /** The one stylesheet that repaints the shipped launcher avatar. */
     let paintTag = null
 
@@ -1516,6 +1523,7 @@ window.__ModuleLoader__.load({
       paintTag.textContent = rules.join('')
     }
 
+// ═══ 70-account.js · Reading the account identity out of the shipped panel, caching it by contact, and following it when the account changes.
     /**
      * The account identity only exists in the Settings "account" panel.
      *
@@ -1690,6 +1698,7 @@ window.__ModuleLoader__.load({
       }
     }
 
+// ═══ 80-apply.js · Slot registration: the Settings section and the launcher-name guard.
     /** Slot registration and dictionaries; no side effects outside `apply`. */
     function apply(ctx) {
       const t = ctx.locale.bind(NS)
@@ -1777,3 +1786,4 @@ window.__ModuleLoader__.load({
     }
   },
 })
+// ═══ built from src/ by build.mjs — edit the slices, not this file
