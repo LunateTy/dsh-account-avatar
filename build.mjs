@@ -65,10 +65,16 @@ const assembled = HEADER + pieces.join('') + FOOTER
 if (process.argv.includes('--check')) {
   const current = readFileSync(TARGET, 'utf8')
   // The banner lines are documentation the build keeps; compare the code with
-  // them removed, which is the claim worth checking. Trailing whitespace is
-  // ignored too, so a final newline cannot masquerade as a change.
+  // them removed, which is the claim worth checking. Line endings are normalised
+  // first: git checks files out with CRLF on Windows, while the build writes LF,
+  // and a difference in line endings is not a difference in behaviour.
   const withoutBanners = (text) =>
-    text.split('\n').filter((line) => !line.startsWith('// ═══')).join('\n').trimEnd()
+    text
+      .replace(/\r\n/gu, '\n')
+      .split('\n')
+      .filter((line) => !line.startsWith('// ═══'))
+      .join('\n')
+      .trimEnd()
   const same = withoutBanners(assembled) === withoutBanners(current)
   console.log(`${files.length} slices, ${assembled.length} bytes assembled`)
   console.log(`matches ${TARGET}: ${same}`)
