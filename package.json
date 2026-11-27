@@ -40,7 +40,8 @@
               ],
     "scripts":  {
                     "build":  "node build.mjs",
-                    "check":  "node build.mjs --check"
+                    "check":  "node build.mjs --check",
+                    "test":  "node --test test/host.test.mjs"
                 },
     "dsh":  {
                 "bundle":  {

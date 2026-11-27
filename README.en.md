@@ -1,7 +1,7 @@
 # dsh-account-avatar
 
 <p align="center">
-  🌐 <b>English</b> &nbsp;·&nbsp; <a href="README.md">简体中文</a>
+  🌐 <b>English</b> &nbsp;·&nbsp; <a href="README.md">简体中文</a> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 Replaces the avatar at the bottom of the DeepSeek Harness sidebar with a picture you upload, and lets you set your own nickname.

@@ -17,7 +17,14 @@ const IMAGE_ROUTE = '/account-avatar/api/image'
 /** Bumped when the thumbnail pipeline changes, so clients re-render old thumbs once. */
 const THUMB_VERSION = 2
 
-/** Largest accepted request body; a 256px avatar plus its thumb is far below this. */
+/**
+ * Largest accepted request body.
+ *
+ * This bounds one JSON document on the wire, not the file a user picks: the
+ * browser half crops to 256×256 *before* sending, so a stored picture plus its
+ * thumbnail is tens of kilobytes. The 12 MB picker limit in the client governs
+ * only what the browser will decode locally, and never reaches this route.
+ */
 const MAX_BODY_BYTES = 6 * 1024 * 1024
 /** Largest accepted data: URL length for one stored picture. */
 const MAX_IMAGE_CHARS = 2 * 1024 * 1024
@@ -400,3 +407,9 @@ function registerRoutes(ctx, webServer) {
   ctx.effect(() => webServer.register(mutateRoute), `account-avatar: POST ${MUTATE_ROUTE}`)
   ctx.effect(() => webServer.register(imageRoute), `account-avatar: GET ${IMAGE_ROUTE}`)
 }
+
+// The three pure functions below carry the library's actual rules — which stored
+// records survive a read, what the browser is told about them, and which strings
+// count as pictures. Exported so `test/host.test.mjs` can check them without a
+// Harness context or a filesystem; the plugin entry point is still `apply`.
+export { isImage, normaliseLibrary, toState }

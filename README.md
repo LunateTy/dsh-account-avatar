@@ -1,7 +1,7 @@
 # dsh-account-avatar
 
 <p align="center">
-  🌐 <a href="README.en.md">English</a> &nbsp;·&nbsp; <b>简体中文</b>
+  🌐 <a href="README.en.md">English</a> &nbsp;·&nbsp; <b>简体中文</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">更新日志</a>
 </p>
 
 把 DeepSeek Harness 左侧栏最下面那个头像换成可以自己上传的图像，并且可以自定义昵称。
