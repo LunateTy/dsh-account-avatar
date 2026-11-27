@@ -6,7 +6,7 @@
 
 把 DeepSeek Harness 左侧栏最下面那个头像换成可以自己上传的图像，并且可以自定义昵称。
 
-![设置 → 头像，已预选一张但还没应用](assets/panel-1.png)
+![设置 → 头像，已预选一张但还没应用](https://raw.githubusercontent.com/LunateTy/dsh-account-avatar/main/assets/panel-1.png)
 
 ## 功能
 
@@ -87,7 +87,7 @@ Platform 会返回微信昵称和头像。
 - 正在用的那张是实心蓝框，预选的那张是虚线蓝框
 - 存满 100 张后再存，会顶掉**最旧**的一张；当前那张永远不会被顶掉
 
-![预选状态：右侧预览已切换，标注「待应用」](assets/panel-2.png)
+![预选状态：右侧预览已切换，标注「待应用」](https://raw.githubusercontent.com/LunateTy/dsh-account-avatar/main/assets/panel-2.png)
 
 ### 批量操作
 
@@ -97,7 +97,7 @@ Platform 会返回微信昵称和头像。
 - **全选** / **删除选中 (n)** / **取消**
 - 删掉的如果包含正在用的那张，会自动退到剩下的最新一张；全删光就回到账号头像
 
-![选择模式：勾了两张，删除按钮显示数量](assets/panel-3.png)
+![选择模式：勾了两张，删除按钮显示数量](https://raw.githubusercontent.com/LunateTy/dsh-account-avatar/main/assets/panel-3.png)
 
 ### 头像形状
 

@@ -6,7 +6,7 @@
 
 Replaces the avatar at the bottom of the DeepSeek Harness sidebar with a picture you upload, and lets you set your own nickname.
 
-![Settings → Avatar, a picture pre-selected but not applied yet](assets/panel-1.png)
+![Settings → Avatar, a picture pre-selected but not applied yet](https://raw.githubusercontent.com/LunateTy/dsh-account-avatar/main/assets/panel-1.png)
 
 ## Features
 
@@ -87,7 +87,7 @@ Every save is kept, up to **100** pictures:
 - Solid blue ring = in use, dashed blue ring = pre-selected
 - Past 100, the **oldest** entry is dropped; the one in use is never dropped
 
-![A pre-selected entry: the right preview shows it, the caption reads "not applied yet"](assets/panel-2.png)
+![A pre-selected entry: the right preview shows it, the caption reads "not applied yet"](https://raw.githubusercontent.com/LunateTy/dsh-account-avatar/main/assets/panel-2.png)
 
 ### Bulk actions
 
@@ -97,7 +97,7 @@ Every save is kept, up to **100** pictures:
 - **Select all** / **Delete selected (n)** / **Cancel**
 - Deleting the entry in use falls back to the newest remaining one; delete them all and the account picture comes back
 
-![Selection mode with two entries checked and "Delete selected (2)" ready](assets/panel-3.png)
+![Selection mode with two entries checked and "Delete selected (2)" ready](https://raw.githubusercontent.com/LunateTy/dsh-account-avatar/main/assets/panel-3.png)
 
 ### Shape
 

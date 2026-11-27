@@ -36,7 +36,6 @@
                   "cordis.patch.yml",
                   "locale/*.json",
                   "docs",
-                  "assets/panel-*.png",
                   "icon.svg"
               ],
     "scripts":  {
