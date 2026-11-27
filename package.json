@@ -34,7 +34,7 @@
                   "cordis.patch.yml",
                   "locale/*.json",
                   "docs",
-                  "assets/*.png",
+                  "assets/panel-*.png",
                   "icon.svg"
               ],
     "dsh":  {

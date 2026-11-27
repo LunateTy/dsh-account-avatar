@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Custom avatar",
-    "description": "Upload your own picture in Settings to replace the avatar at the bottom of the sidebar, with a history of up to 100 pictures and circle / rounded / square shapes. Local to this computer.",
+    "description": "Upload your own picture in Settings → Avatar to replace the avatar at the bottom of the sidebar, with circle, rounded and square shapes and a history of up to 100 pictures. Works signed in or out. Stored on this device only: the picture and the name never leave it, the DeepSeek account is untouched, and clearing browser data resets the browser-side copy.",
     "detail": "docs/DETAIL.md"
   }
 }
