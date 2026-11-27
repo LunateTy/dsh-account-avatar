@@ -8,7 +8,7 @@ Replaces the avatar at the bottom of the DeepSeek Harness sidebar with a picture
 
 ![Settings → Avatar, a picture pre-selected but not applied yet](assets/panel-1.png)
 
-## Why
+## Features
 
 The sidebar shows whatever your DeepSeek account says. Sign in with WeChat, or bind WeChat to the account, and that is your WeChat profile picture — and while the account is signed in that way, DSH offers no separate avatar setting.
 
@@ -54,7 +54,7 @@ Such an account has **no Platform nickname** (`id_profile` is `null`), so DSH it
 
 - Avatar: your picture; the grey person icon when nothing is uploaded
 - Name: your custom name, else the masked contact
-- **No `@` line** — a masked number is not a nickname, and `@1XX******XX` is just noise
+- **No `@` line**
 
 ### Signed in with WeChat
 
@@ -121,7 +121,7 @@ The first line is your name — **click it to edit**:
 - The sidebar label follows whatever is shown here
 - The name lives in **this browser**, never in the account
 
-If another plugin (Claude Style, for instance) also rewrites that label, Settings shows an amber warning next to the name and this plugin steps aside instead of fighting — two plugins repainting the same node every 200 ms just makes the text flicker.
+If another plugin also rewrites that label, Settings shows an amber warning next to the name and this plugin steps aside instead of fighting.
 
 ## Where it is stored
 
