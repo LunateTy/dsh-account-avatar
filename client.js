@@ -35,16 +35,44 @@ window.__ModuleLoader__.load({
     const MAX_FILE_BYTES = 12 * 1024 * 1024
     const MAX_NAME_CHARS = 24
 
-    /** The signed-in account's own name, shown as @handle under the custom name. */
+    /** The signed-in account's label, shown as `@handle` under the custom name. */
     let accountLabel = ''
+    /**
+     * Whether `accountLabel` is a real Platform display name.
+     *
+     * A phone-only account has no identity profile, so its label is the masked
+     * contact — that reads as `1XX******XX`, which is nobody's handle.
+     */
+    let accountLabelIsName = false
     /** Kept so the settings page can look the account up on the client side. */
     let pluginCtx = null
-    /** Cached DeepSeek account name, learned from the settings account panel. */
-    const ACCOUNT_KEY = 'dsh.account-avatar.account.v1'
+    /**
+     * Cached account identity: `{ name, contact }`.
+     *
+     * The name alone cannot survive a sign-out and a different sign-in — the old
+     * value would keep rendering as `@handle` forever. The masked contact is the
+     * cheap fingerprint that tells the two apart.
+     */
+    const ACCOUNT_KEY = 'dsh.account-avatar.account.v2'
+    /** The first version stored the bare name string under this key. */
+    const LEGACY_ACCOUNT_KEY = 'dsh.account-avatar.account.v1'
+    /** Anything longer is a status line or a sentence, not an account name. */
+    const MAX_ACCOUNT_CHARS = 32
+    /** Listeners waiting for the account name to change (the Settings card's @line). */
+    const accountListeners = new Set()
     /** Cached custom name, so the launcher shows it before Settings is ever opened. */
     const NAME_KEY = 'dsh.account-avatar.name.v1'
     /** The name painted into the launcher seat, kept in sync with the settings card. */
     let launcherName = ''
+    /**
+     * The seat label while signed out.
+     *
+     * Read from the same dictionary the Settings card uses, resolved against the
+     * browser language, so the sidebar and the card never disagree about the
+     * wording. Set once the dictionaries exist; `paintLauncherName` is only ever
+     * called after that.
+     */
+    let signedOutLabel = ''
     /** Set when the seat label keeps getting rewritten by another plugin. */
     let launcherConflict = false
     let repaintHits = 0
@@ -74,9 +102,29 @@ window.__ModuleLoader__.load({
       if (repaintHits >= 3) launcherConflict = true
     }
 
+    /** Whether the shipped launcher is showing a signed-out button right now. */
+    function launcherSignedOut() {
+      try {
+        for (const trigger of document.querySelectorAll('[aria-haspopup="menu"]')) {
+          const box = trigger.getBoundingClientRect()
+          if (box.width === 0 || box.height === 0) continue
+          if (box.top < window.innerHeight - 160) continue
+          return trigger.getAttribute('data-signed-out') === 'true'
+        }
+      } catch {
+        // fall through: assume signed in, which is the only case with a name
+      }
+      return false
+    }
+
     /** Replace the text next to the sidebar avatar with the custom name. */
     function paintLauncherName() {
-      if (launcherName === '') return
+      // Signed out there is no account to name, so the seat says so instead of
+      // repeating the shipped "More"/「更多」 and instead of keeping a name from
+      // an account that has since signed out.
+      const signedOut = launcherSignedOut()
+      const target = signedOut ? (signedOutLabel !== '' ? signedOutLabel : '未登录') : launcherName
+      if (target === '') return
       // Someone else owns the label; keep fighting and it just flickers.
       if (launcherConflict) return
       try {
@@ -95,9 +143,9 @@ window.__ModuleLoader__.load({
             }
             if (texts.length === 1) {
               const node = texts[0]
-              if (node.textContent !== launcherName) {
+              if (node.textContent !== target) {
                 noteRepaint()
-                node.textContent = launcherName
+                node.textContent = target
               }
               return
             }
@@ -108,7 +156,7 @@ window.__ModuleLoader__.load({
 
         // Fallback: the seat label still reads as the account name, and it sits in
         // the bottom strip of the window. Replace that one.
-        const source = accountLabel !== '' ? accountLabel : readCachedAccount()
+        const source = accountLabel !== '' ? accountLabel : readCachedAccountLabel()
         if (source === '') return
         const limit = window.innerHeight - 200
         const all = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
@@ -119,7 +167,7 @@ window.__ModuleLoader__.load({
           const rect = host.getBoundingClientRect()
           if (rect.top < limit) continue
           noteRepaint()
-          node.textContent = launcherName
+          node.textContent = target
           return
         }
       } catch {
@@ -132,7 +180,10 @@ window.__ModuleLoader__.load({
       const next = typeof name === 'string' ? name.trim() : ''
       launcherName = next
       writeNameCache(next)
-      if (next !== '') paintLauncherName()
+      // Signed out the seat reads 「未登录」 regardless of what the custom name is,
+      // but the paint still has to run: `launcherName` switching is not the only
+      // reason the label needs writing.
+      if (next !== '' || launcherSignedOut()) paintLauncherName()
     }
 
     /** Percent radii keep the launcher (24px) and the preview (72px) visually consistent. */
@@ -141,14 +192,192 @@ window.__ModuleLoader__.load({
     const SHAPE_RADIUS_PX = { circle: '48px', rounded: '25px', square: '10px' }
     const SHAPE_ORDER = ['circle', 'rounded', 'square']
 
-    /** The avatar element the shipped account launcher paints. */
-    const AVATAR_SELECTOR = '[data-avatar-status]'
+    /**
+     * The avatar seat in the sidebar account launcher.
+     *
+     * The shipped launcher writes `data-avatar-status={account.avatar?.status}` and
+     * React drops an attribute whose value is undefined, so an account that never
+     * uploaded a picture has no marker at all — the launcher paints a plain icon
+     * there instead. Match a runtime tag as well, otherwise the plugin silently
+     * does nothing for exactly the people who want it most.
+     */
+    const SEAT_ATTR = 'data-ast-avatar'
+    const AVATAR_SELECTOR = `:is([data-avatar-status],[${SEAT_ATTR}])`
+    /** Class on the launcher button while this plugin supplies a signed-out seat. */
+    const SIGNED_OUT_CLASS = 'ast-signed-out-seat'
+    /**
+     * Inline geometry for a seat this plugin had to create.
+     *
+     * The shipped seat is styled by a hashed CSS module class that no plugin can
+     * name, and the injected stylesheet only paints pictures over it. A node that
+     * has to exist before the stylesheet is written therefore carries its own box.
+     */
+    const SEAT_STYLE = [
+      'flex:none', 'display:flex', 'align-items:center', 'justify-content:center',
+      'width:24px', 'height:24px', 'border-radius:50%', 'order:-1',
+      'background:var(--dsw-alias-bg-skeleton, rgba(127,127,127,.18))',
+      'color:var(--dsw-alias-label-tertiary, #8a8a8a)',
+    ].join(';')
+
+    /**
+     * The placeholder inside a seat this plugin created.
+     *
+     * Same 16px person silhouette the shipped launcher renders for an account
+     * with no picture, inlined because that icon component is not importable
+     * from a client bundle. Hidden by the same `> svg` rule that hides the
+     * shipped one once a picture is painted over it.
+     */
+    const SIGNED_OUT_GLYPH = '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">'
+      + '<circle cx="8" cy="5.7" r="2.7"></circle>'
+      + '<path d="M2.8 14c0-2.9 2.3-4.7 5.2-4.7s5.2 1.8 5.2 4.7z"></path>'
+      + '</svg>'
+
+    /**
+     * Hide the shipped ellipsis behind a signed-out seat.
+     *
+     * The launcher renders `IconEllipsisOutlineMedium` in place of the avatar
+     * span when signed out, and it sits at index 0 of the button's children.
+     * Removing it would renumber every sibling React still holds — the same trap
+     * that makes the seat get *appended* rather than inserted — so it is hidden
+     * with `display:none`, which also drops it out of the flex `gap`.
+     *
+     * Only direct `svg` children are matched, so the person glyph inside the new
+     * seat survives; the "More" label is a `span` and stays as shipped.
+     */
+    const SIGNED_OUT_CSS = `.${SIGNED_OUT_CLASS}>svg{display:none!important}`
+
+    /** Paint the rule once; every signed-out launcher in this document needs it. */
+    function ensureSignedOutStyles() {
+      if (document.querySelector('style[data-ast-signed-out]') !== null) return
+      const tag = document.createElement('style')
+      tag.dataset.astSignedOut = ''
+      tag.textContent = SIGNED_OUT_CSS
+      document.head.appendChild(tag)
+    }
+
+    /**
+     * Give the signed-out launcher a seat of its own.
+     *
+     * Signed out, the shipped button renders an ellipsis instead of a `span`
+     * (AccountMenu.tsx switches to `IconEllipsisOutlineMedium`), so there is no
+     * element to paint a picture onto. The seat is *appended*, never inserted:
+     * React reconciles a button's children by index, and a node pushed onto the
+     * end cannot shift the children it already owns. `order:-1` puts it first on
+     * screen, which is where an avatar belongs.
+     *
+     * @param trigger - the account menu button carrying `data-signed-out="true"`.
+     * @returns whether a seat is now in place.
+     */
+    function ensureSignedOutSeat(trigger) {
+      trigger.classList.add(SIGNED_OUT_CLASS)
+      ensureSignedOutStyles()
+      if (trigger.querySelector(`[${SEAT_ATTR}]`) !== null) return true
+      const seat = document.createElement('span')
+      seat.setAttribute(SEAT_ATTR, '')
+      seat.style.cssText = SEAT_STYLE
+      // Until a picture is chosen the seat shows the same person glyph the
+      // shipped seat uses when an account has no picture, so a signed-out
+      // launcher does not read as an empty grey box.
+      seat.innerHTML = SIGNED_OUT_GLYPH
+      trigger.appendChild(seat)
+      return true
+    }
+
+    /**
+     * Drop a signed-out seat once the button is signed in again.
+     *
+     * Signing in replaces the button's children with the shipped avatar, but a
+     * node this plugin appended can survive that; leaving it behind would put a
+     * second, stale picture next to the real one.
+     *
+     * @returns nothing.
+     */
+    function sweepSignedOutSeat() {
+      for (const trigger of document.querySelectorAll(`.${SIGNED_OUT_CLASS}`)) {
+        if (trigger.getAttribute('data-signed-out') === 'true') continue
+        trigger.classList.remove(SIGNED_OUT_CLASS)
+        const stale = trigger.querySelector(`[${SEAT_ATTR}]`)
+        if (stale !== null) stale.remove()
+      }
+      // The rule has no users left once every launcher is signed in again.
+      if (document.querySelector(`.${SIGNED_OUT_CLASS}`) === null) {
+        document.querySelector('style[data-ast-signed-out]')?.remove()
+      }
+    }
+
+    /**
+     * Tag the launcher's avatar seat when the shipped marker is missing.
+     *
+     * Finds the account menu button pinned to the bottom strip of the window and
+     * takes its square, icon-bearing span. `aria-haspopup` is semantic and stable,
+     * unlike the hashed CSS module class names. A signed-out button has no such
+     * span, so that case gets one appended instead.
+     */
+    function markLauncherSeat() {
+      try {
+        sweepSignedOutSeat()
+        const limit = window.innerHeight - 160
+        const candidates = []
+        for (const trigger of document.querySelectorAll('[aria-haspopup="menu"]')) {
+          const box = trigger.getBoundingClientRect()
+          if (box.width === 0 || box.height === 0) continue
+          if (box.top < limit) continue
+          candidates.push(trigger)
+        }
+        // A shipped account launcher also carries `data-collapsed`; another menu
+        // button pinned near the bottom must not win on geometry alone.
+        candidates.sort((a, b) => Number(b.hasAttribute('data-collapsed')) - Number(a.hasAttribute('data-collapsed')))
+        for (const trigger of candidates) {
+          if (trigger.getAttribute('data-signed-out') === 'true') return ensureSignedOutSeat(trigger)
+          // This trigger already carries the runtime tag.
+          if (trigger.querySelector(`[${SEAT_ATTR}]`) !== null) return true
+          // A shipped marker inside this trigger means the seat is already
+          // addressable; leave it alone so the two selectors never disagree.
+          if (trigger.querySelector('[data-avatar-status]') !== null) return true
+          for (const span of trigger.querySelectorAll('span')) {
+            const rect = span.getBoundingClientRect()
+            if (rect.width < 12 || rect.width > 48) continue
+            // The seat is square; a wide one is the name label.
+            if (Math.abs(rect.width - rect.height) > 6) continue
+            if (span.querySelector('img, svg') === null) continue
+            span.setAttribute(SEAT_ATTR, '')
+            return true
+          }
+        }
+      } catch {
+        // No launcher on this screen; the DOM observer retries.
+      }
+      return false
+    }
+
+    /**
+     * Retry the tag for a few seconds after boot.
+     *
+     * The launcher mounts on the first shell render, which may land after this
+     * bundle applies and before any mutation wakes the observer; a short bounded
+     * poll covers that gap without a permanent timer.
+     *
+     * @param onReady - called once the seat exists, so the stored name can be
+     * painted without waiting for an unrelated DOM change.
+     * @param attempts - polls left before giving up.
+     * @returns nothing.
+     */
+    function retryLauncherSeat(onReady, attempts = 10) {
+      if (markLauncherSeat()) {
+        if (typeof onReady === 'function') onReady()
+        return
+      }
+      if (attempts <= 1) return
+      window.setTimeout(() => { retryLauncherSeat(onReady, attempts - 1) }, 300)
+    }
 
     const dictionaries = {
       zh: {
         sectionLabel: '头像',
         title: '个人头像',
         hint: '仅对此设备生效',
+        signedOutName: '未登录',
+        signedOutHint: '还没登录 DeepSeek，头像先存在本机，登录后自动生效',
         upload: '上传图片',
         replace: '上传',
         reset: '恢复默认',
@@ -188,12 +417,15 @@ window.__ModuleLoader__.load({
         apply: '应用',
         editName: '点击修改名字',
         saveNameFailed: '名字没保存成功',
+        saveNameLocalOnly: '名字已在本机生效，但没同步给后台（重启后可能需要重设）',
         nameConflict: '侧栏名字正被其他插件改写，显示可能不一致',
       },
       en: {
         sectionLabel: 'Avatar',
         title: 'Profile picture',
         hint: 'Applies to this device only.',
+        signedOutName: 'Not signed in',
+        signedOutHint: 'Not signed in to DeepSeek yet. The picture is kept on this device and shows up once you sign in.',
         upload: 'Upload picture',
         replace: 'Upload',
         reset: 'Reset to default',
@@ -233,6 +465,7 @@ window.__ModuleLoader__.load({
         apply: 'Apply',
         editName: 'Click to rename',
         saveNameFailed: "Couldn't save the name.",
+        saveNameLocalOnly: 'The name applies in this browser, but the stored copy did not update; it may reset after a restart.',
         nameConflict: 'Another plugin is rewriting the sidebar name; it may not match.',
       },
     }
@@ -257,7 +490,7 @@ window.__ModuleLoader__.load({
 .ast_hint{margin:0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-secondary)}
 .ast_tag{display:inline-flex;align-items:center;align-self:flex-start;height:20px;padding:0 8px;border-radius:6px;background:color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);color:var(--dsw-alias-brand-primary);font-size:11px;line-height:20px;white-space:nowrap}
 .ast_status{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
-.ast_actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.ast_actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:4px}
 .ast_button{height:32px;padding:0 14px;border-radius:var(--dsw-radius-md, 10px);border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer}
 .ast_button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 8%, transparent))}
 .ast_button:disabled{opacity:.55;cursor:default}
@@ -314,6 +547,16 @@ window.__ModuleLoader__.load({
         }
         return dictionaries[fallback][key] ?? dictionaries.en[key] ?? key
       }
+    }
+
+    /**
+     * Resolve the signed-out seat label from the same dictionary the card uses.
+     *
+     * @param t - the locale binder, or undefined before the slot is registered.
+     * @returns the label to paint into the launcher while signed out.
+     */
+    function resolveSignedOutLabel(t) {
+      return makeTranslator(t)('signedOutName')
     }
 
     function clamp(value, min, max) {
@@ -383,8 +626,31 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * Whether this shell exposes the Host's loopback routes at all.
+     *
+     * The desktop shell loads the UI over its own `dsh-app:` scheme instead of
+     * HTTP, so a relative `/account-avatar/api/...` request has no handler and can
+     * never succeed. One probe decides which store the session uses: the Host
+     * library when it answers, a browser-local library when it does not. Without
+     * that fallback, uploading on desktop reports a storage failure forever.
+     */
+    let hostAvailable = null
+    async function probeHost() {
+      if (hostAvailable !== null) return hostAvailable
+      try {
+        const response = await fetch(STATE_URL, { headers: { accept: 'application/json' }, cache: 'no-store' })
+        // A 404 means the route is absent; any JSON answer means it is mounted.
+        hostAvailable = response.ok
+      } catch {
+        hostAvailable = false
+      }
+      return hostAvailable
+    }
+
     /** Apply one mutation on the Host and get the new state back. */
     async function mutate(op, payload = {}) {
+      if (!(await probeHost())) return mutateLocal(op, payload)
       try {
         const response = await fetch(MUTATE_URL, {
           method: 'POST',
@@ -399,6 +665,117 @@ window.__ModuleLoader__.load({
       } catch {
         return { ok: false }
       }
+    }
+
+    /** The browser-local library key; used only when the Host routes are absent. */
+    const LOCAL_LIBRARY_KEY = 'dsh.account-avatar.library.v1'
+
+    /** @returns the browser-local library, normalised so callers always see items. */
+    function readLocalLibrary() {
+      try {
+        const raw = window.localStorage.getItem(LOCAL_LIBRARY_KEY)
+        if (typeof raw !== 'string' || raw === '') return { shape: 'circle', currentId: null, displayName: '', items: [] }
+        const parsed = JSON.parse(raw)
+        return {
+          shape: SHAPE_ORDER.includes(parsed?.shape) ? parsed.shape : 'circle',
+          currentId: typeof parsed?.currentId === 'string' ? parsed.currentId : null,
+          displayName: typeof parsed?.displayName === 'string' ? parsed.displayName : '',
+          items: Array.isArray(parsed?.items)
+            ? parsed.items.filter((item) => item !== null && typeof item === 'object'
+              && typeof item.id === 'string' && typeof item.image === 'string')
+            : [],
+        }
+      } catch {
+        return { shape: 'circle', currentId: null, displayName: '', items: [] }
+      }
+    }
+
+    function writeLocalLibrary(library) {
+      try {
+        window.localStorage.setItem(LOCAL_LIBRARY_KEY, JSON.stringify(library))
+        return true
+      } catch {
+        // Quota exceeded: the caller reports it rather than pretending to work.
+        return false
+      }
+    }
+
+    /** Project a local library into the state shape the UI renders. */
+    function localState(library) {
+      const current = library.items.find((item) => item.id === library.currentId) ?? null
+      return normaliseState({
+        shape: library.shape,
+        currentId: current === null ? null : current.id,
+        currentImage: current === null ? null : current.image,
+        displayName: library.displayName,
+        thumbVersion: THUMB_VERSION,
+        count: library.items.length,
+        max: 100,
+        items: library.items.map((item) => ({ id: item.id, thumb: item.thumb ?? item.image })),
+      })
+    }
+
+    /**
+     * Apply one mutation to the browser-local library.
+     *
+     * Mirrors the Host's operations so the Settings page behaves the same either
+     * way: add keeps at most 100 and drops the oldest, remove falls back to the
+     * newest remaining picture, and the one in use is never evicted.
+     *
+     * @param op - add, remove, reset, shape or name.
+     * @param payload - operation arguments.
+     * @returns the same result shape the HTTP path returns.
+     */
+    function mutateLocal(op, payload) {
+      const library = readLocalLibrary()
+      if (op === 'add') {
+        const image = typeof payload.image === 'string' ? payload.image : ''
+        if (image === '') return { ok: false, error: 'missing-image' }
+        const id = `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+        library.items.push({
+          id,
+          image,
+          thumb: typeof payload.thumb === 'string' ? payload.thumb : image,
+        })
+        // Cap at 100 without ever dropping the entry currently in use.
+        while (library.items.length > 100) {
+          const victim = library.items.findIndex((item) => item.id !== library.currentId)
+          if (victim < 0) break
+          library.items.splice(victim, 1)
+        }
+        library.currentId = id
+      } else if (op === 'remove') {
+        const ids = Array.isArray(payload.ids) ? payload.ids : []
+        library.items = library.items.filter((item) => !ids.includes(item.id))
+        if (library.currentId !== null && ids.includes(library.currentId)) {
+          library.currentId = library.items.length > 0 ? library.items[library.items.length - 1].id : null
+        }
+      } else if (op === 'reset') {
+        library.currentId = null
+      } else if (op === 'select') {
+        const id = typeof payload.id === 'string' ? payload.id : ''
+        if (!library.items.some((item) => item.id === id)) return { ok: false, error: 'unknown-id' }
+        library.currentId = id
+      } else if (op === 'shape') {
+        if (SHAPE_ORDER.includes(payload.shape)) library.shape = payload.shape
+      } else if (op === 'name') {
+        library.displayName = typeof payload.name === 'string'
+          ? payload.name.trim().slice(0, MAX_NAME_CHARS)
+          : ''
+      } else {
+        return { ok: false, error: 'unknown-op' }
+      }
+      if (!writeLocalLibrary(library)) return { ok: false, error: 'quota' }
+      return { ok: true, state: localState(library) }
+    }
+
+    /** Read the initial state from whichever store this shell actually has. */
+    async function readInitialState() {
+      if (await probeHost()) {
+        const remote = await fetchState()
+        if (remote !== undefined) return remote
+      }
+      return localState(readLocalLibrary())
     }
 
     /** Downscale one stored picture into the list thumbnail, flattening transparency. */
@@ -449,6 +826,11 @@ window.__ModuleLoader__.load({
 
     /** Fetch one original picture, used to rebuild its thumbnail. */
     async function fetchImage(id) {
+      // The local library already holds the original inline; there is no route to ask.
+      if (!(await probeHost())) {
+        const item = readLocalLibrary().items.find((entry) => entry.id === id)
+        return item === undefined ? null : item.image
+      }
       try {
         const response = await fetch(`${IMAGE_URL}?id=${encodeURIComponent(id)}`, {
           headers: { accept: 'application/json' },
@@ -658,14 +1040,17 @@ window.__ModuleLoader__.load({
         shape: readShapeCache() ?? 'circle',
         currentId: null,
         currentImage: readCache(),
-        displayName: '',
+        // Seed from this browser's own copy, so a rename survives until the Host
+        // answers — and stays even if it never does.
+        displayName: readNameCache(),
         count: 0,
         max: 100,
         items: [],
       }))
       const [editing, setEditing] = useState(false)
       const [nameDraft, setNameDraft] = useState('')
-      const [handle, setHandle] = useState(() => accountLabel)
+      /** The account's own label plus whether it is a real name (not a masked contact). */
+      const [handle, setHandle] = useState(() => ({ label: accountLabel, isName: accountLabelIsName }))
       const [conflict, setConflict] = useState(false)
       const [draft, setDraft] = useState(null)
       const [error, setError] = useState(null)
@@ -678,21 +1063,30 @@ window.__ModuleLoader__.load({
 
       /** Adopt one Host state everywhere it shows: model, caches, launcher paint. */
       const adopt = useCallback((next) => {
-        setModel(next)
+        // The custom name is device-local: a nameless Host state (a fresh store, or
+        // routes that never mounted) must not erase what this browser already has.
+        const localName = readNameCache()
+        const merged = localName !== '' && next.displayName === ''
+          ? { ...next, displayName: localName }
+          : next
+        setModel(merged)
         setPendingId(null)
         setPendingImage(null)
-        writeCache(next.currentImage)
-        writeShapeCache(next.shape)
-        setAvatarPaint(next.currentImage, next.shape)
-        setLauncherName(next.displayName !== '' ? next.displayName : accountLabel)
+        writeCache(merged.currentImage)
+        writeShapeCache(merged.shape)
+        setAvatarPaint(merged.currentImage, merged.shape)
+        setLauncherName(merged.displayName !== '' ? merged.displayName : accountLabel)
       }, [])
 
       useEffect(() => {
         let live = true
         void (async () => {
-          const remote = await fetchState()
+          const remote = await readInitialState()
           if (!live || remote === undefined) return
           adopt(remote)
+          // Only the Host library carries stale thumbnails to migrate; the local
+          // one is generated by this same browser and is already current.
+          if (!(await probeHost())) return
           const migrated = await migrateThumbs(remote)
           if (!live || migrated === remote) return
           adopt(migrated)
@@ -700,18 +1094,12 @@ window.__ModuleLoader__.load({
         return () => { live = false }
       }, [adopt])
 
-      // The account panel may render after this page; pick the name up when it does.
+      // The identity may land after this page mounts, and it changes whenever a
+      // different account signs in; follow it instead of sampling once.
       useEffect(() => {
-        if (handle !== '') return undefined
-        const timer = window.setInterval(() => {
-          const next = accountLabel !== '' ? accountLabel : readCachedAccount()
-          if (next !== '') {
-            setHandle(next)
-            window.clearInterval(timer)
-          }
-        }, 400)
-        return () => window.clearInterval(timer)
-      }, [handle])
+        if (accountLabel !== '') setHandle({ label: accountLabel, isName: accountLabelIsName })
+        return subscribeAccount((label, isName) => setHandle({ label, isName }))
+      }, [])
 
       // Surface a warning when another plugin keeps taking the seat label back.
       useEffect(() => {
@@ -825,21 +1213,33 @@ window.__ModuleLoader__.load({
         setSelected((current) => (current.length === model.items.length ? [] : model.items.map((item) => item.id)))
       }, [model.items])
 
-      /** Persist the custom name; an empty value falls back to the default label. */
+      /**
+       * Persist the custom name.
+       *
+       * The name is device-local by design — it never leaves this browser — so the
+       * local write is the authoritative one and the Host copy is a best-effort
+       * mirror that keeps a reload in step. Requiring the Host round trip first
+       * turned a working rename into "could not save" whenever the loopback
+       * routes were not mounted, which says nothing about whether the name stuck.
+       */
       const commitName = useCallback(async () => {
         if (!editing) return
         const next = nameDraft.trim().slice(0, MAX_NAME_CHARS)
         setEditing(false)
         if (next === model.displayName) return
+
+        setModel((current) => ({ ...current, displayName: next }))
+        const fallback = next !== '' ? next : accountLabel
+        setLauncherName(fallback)
+        if (next === '' && launcherSignedOut()) paintLauncherName()
+
+        // Refresh the name the launcher shows, then mirror to the Host silently.
+        paintLauncherName()
         const result = await mutate('name', { name: next })
-        if (!result.ok) {
-          setError(tr('saveNameFailed'))
-          return
-        }
-        setError(null)
-        setModel((current) => ({ ...current, displayName: result.state.displayName }))
-        setLauncherName(result.state.displayName !== '' ? result.state.displayName : accountLabel)
-      }, [editing, model.displayName, nameDraft, tr])
+        // A rejected mirror is reported, but the value above already took effect in
+        // this browser; nothing the user typed is lost.
+        setError(result.ok ? null : tr('saveNameLocalOnly'))
+      }, [editing, model.displayName, nameDraft, tr, accountLabel])
 
       const changeShape = useCallback(async (shape) => {
         const previous = model.shape
@@ -874,8 +1274,17 @@ window.__ModuleLoader__.load({
 
       const portalize = (node) => (createPortal === null ? node : createPortal(node, document.body))
       const countText = tr('historyCount').replace('{n}', String(model.count)).replace('{max}', String(model.max))
-      /** Default name is the account handle, until the user types their own. */
-      const effectiveName = model.displayName !== '' ? model.displayName : (handle !== '' ? handle : tr('title'))
+      /**
+       * The card's first line, until the user types their own.
+       *
+       * Signed out there is no account to name; a phone-only account has no
+       * Platform name either, so its label is the masked contact. Showing that
+       * masked contact as `@1XX******XX` would be noise, not an identity, and the
+       * line is skipped for both of those cases below.
+       */
+      const signedOut = handle.label === ''
+      const effectiveName = model.displayName !== '' ? model.displayName
+        : (handle.label !== '' ? handle.label : tr('signedOutName'))
       /** The preview shows the picked-but-unapplied picture, else the applied one. */
       const stageImage = pendingImage ?? model.currentImage
       const hasPending = pendingId !== null && pendingId !== model.currentId
@@ -932,8 +1341,9 @@ window.__ModuleLoader__.load({
                 }, effectiveName),
                 conflict ? h('span', { className: 'ast_warn', title: tr('nameConflict') }, `⚠ ${tr('nameConflict')}`) : null,
               ),
-              handle === '' ? null : h('p', { className: 'ast_handle' }, `@${handle}`),
+              handle.label === '' || !handle.isName ? null : h('p', { className: 'ast_handle' }, `@${handle.label}`),
               h('span', { className: 'ast_tag' }, tr('hint')),
+              signedOut ? h('p', { className: 'ast_status' }, tr('signedOutHint')) : null,
               error === null ? null : h('p', { className: 'ast_error' }, error),
               h('div', { className: 'ast_actions' },
                 h('button', {
@@ -1107,82 +1517,185 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The DeepSeek account name only exists in the settings "account" panel, which
-     * renders for a moment when Settings opens. Read it from there, next to the
-     * masked phone number, and cache it.
+     * The account identity only exists in the Settings "account" panel.
+     *
+     * The identity block renders `[avatar] [name / contact]`. Every locale's
+     * signed-in placeholder names the product ("Signed in to DeepSeek"), so a
+     * name that reads like that placeholder is not a name — an account signed up
+     * by phone or email carries no Platform identity profile at all, and the
+     * panel falls back to the placeholder plus the masked contact.
+     *
+     * @returns the visible identity, or undefined while the panel is not mounted.
      */
-    function scanAccountName() {
-      const masked = /^\d{3}\*+\d{2}$/u
-      const usable = (text) => text !== '' && text.length <= 24 && !text.includes('*') && !text.includes('@')
+    function scanAccountIdentity() {
+      const contactish = (text) => text !== '' && text.length <= 48 && !/\s/u.test(text)
+        && (text.includes('*') || /^[^@]+@[^@]+$/u.test(text) || /^\+?\d{6,}$/u.test(text))
+      const nameish = (text) => text !== '' && text.length <= MAX_ACCOUNT_CHARS
+        && !text.includes('*') && !text.includes('@') && !/deepseek/iu.test(text)
       try {
         for (const node of document.querySelectorAll('div, span, p')) {
           if (node.children.length > 0) continue
-          const text = (node.textContent ?? '').trim()
-          if (!masked.test(text)) continue
-          let scope = node.parentElement
-          for (let depth = 0; depth < 3 && scope !== null; depth += 1) {
-            for (const sibling of scope.children) {
-              if (sibling === node) continue
-              const candidate = (sibling.textContent ?? '').trim()
-              if (usable(candidate)) return candidate
-            }
-            scope = scope.parentElement
+          const contact = (node.textContent ?? '').trim()
+          if (!contactish(contact)) continue
+          const copy = node.parentElement
+          if (copy === null) continue
+          // Require the identity block to carry an avatar seat, so a status line
+          // elsewhere on the page cannot pass for an account.
+          const identity = copy.parentElement
+          if (identity === null || identity.querySelector('img, svg') === null) continue
+          for (const sibling of copy.children) {
+            if (sibling === node) continue
+            const name = (sibling.textContent ?? '').trim()
+            if (nameish(name)) return { name, contact }
           }
+          // No usable name: the account has no identity profile, but the masked
+          // contact still identifies which account is signed in.
+          return { name: '', contact }
         }
       } catch {
         // fall through
       }
-      return ''
+      return undefined
     }
 
+    /** @returns `{ name, contact }`; contact is '' for a record written by v1. */
     function readCachedAccount() {
       try {
-        return window.localStorage.getItem(ACCOUNT_KEY) ?? ''
+        const raw = window.localStorage.getItem(ACCOUNT_KEY)
+        if (typeof raw === 'string' && raw !== '') {
+          const parsed = JSON.parse(raw)
+          if (parsed !== null && typeof parsed === 'object') {
+            return {
+              name: typeof parsed.name === 'string' ? parsed.name : '',
+              contact: typeof parsed.contact === 'string' ? parsed.contact : '',
+            }
+          }
+        }
       } catch {
-        return ''
+        // fall through to the legacy key
       }
+      try {
+        const legacy = window.localStorage.getItem(LEGACY_ACCOUNT_KEY)
+        if (typeof legacy === 'string' && legacy !== '') return { name: legacy, contact: '' }
+      } catch {
+        // ignore
+      }
+      return { name: '', contact: '' }
     }
 
-    function writeCachedAccount(name) {
+    function writeCachedAccount(identity) {
       try {
-        window.localStorage.setItem(ACCOUNT_KEY, name)
+        window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ name: identity.name, contact: identity.contact }))
+        // The bare-name key would otherwise keep winning on the next read.
+        window.localStorage.removeItem(LEGACY_ACCOUNT_KEY)
       } catch {
         // ignore
       }
     }
 
-    /** Watch the DOM until the account panel shows up once, then stop. */
-    function watchAccountName() {
-      const known = readCachedAccount()
-      if (known !== '') {
-        accountLabel = known
-        return () => undefined
+    /** @returns the label cached from the last identity, name first then contact. */
+    function readCachedAccountLabel() {
+      return labelOf(readCachedAccount())
+    }
+
+    /** The label a phone-only account shows: its masked contact, exactly as the sidebar does. */
+    function labelOf(identity) {
+      return identity.name !== '' ? identity.name : identity.contact
+    }
+
+    /** Adopt one identity and tell everyone showing it. @returns whether the label changed. */
+    function adoptAccount(identity) {
+      const name = typeof identity?.name === 'string' ? identity.name.trim().slice(0, MAX_ACCOUNT_CHARS) : ''
+      const contact = typeof identity?.contact === 'string' ? identity.contact.trim().slice(0, 48) : ''
+      if (name === '' && contact === '') return false
+      const label = name !== '' ? name : contact
+      const isName = name !== ''
+      if (label === accountLabel) {
+        // Same account: refresh the fingerprint silently so a later switch is caught.
+        accountLabelIsName = isName
+        writeCachedAccount({ name, contact })
+        return false
       }
-      let done = false
-      let last = 0
-      const attempt = () => {
-        if (done) return
-        const now = Date.now()
-        if (now - last < 400) return
-        last = now
-        const name = scanAccountName()
-        if (name === '') return
-        done = true
-        accountLabel = name
-        writeCachedAccount(name)
-        if (launcherName === '') launcherName = name
+      const previous = accountLabel
+      accountLabel = label
+      accountLabelIsName = isName
+      writeCachedAccount({ name, contact })
+      // A different account means the previous `@handle` and any name derived from
+      // it are stale; only a custom name the user typed should survive.
+      if (launcherName === '' || launcherName === previous) {
+        launcherName = label
         paintLauncherName()
-        observer.disconnect()
+      }
+      for (const listener of accountListeners) {
+        try {
+          listener(label, isName)
+        } catch {
+          // one broken listener must not stop the others
+        }
+      }
+      return true
+    }
+
+    /** Subscribe to identity changes. @returns the unsubscribe function. */
+    function subscribeAccount(listener) {
+      accountListeners.add(listener)
+      return () => { accountListeners.delete(listener) }
+    }
+
+    /**
+     * Keep the account identity current.
+     *
+     * A cached identity is a startup shortcut, not the truth: the panel is the
+     * only place the signed-in account is visible, and it re-renders on every
+     * Settings visit. So the watcher keeps observing instead of stopping after
+     * the first hit, and adopts whatever it finds once the contact fingerprint
+     * moves — that is how a sign-out and a different sign-in get picked up.
+     */
+    function watchAccountName() {
+      const cached = readCachedAccount()
+      const cachedLabel = labelOf(cached)
+      if (cachedLabel !== '') {
+        accountLabel = cachedLabel
+        accountLabelIsName = cached.name !== ''
+      }
+      let last = 0
+      let tail = 0
+      /**
+       * Read once, then make sure a throttled pass is not simply dropped.
+       *
+       * Throttling keeps a busy DOM from rescanning on every mutation, but the
+       * last mutation of a burst is usually the one that finished rendering the
+       * card — dropping it would leave the identity one account behind.
+       */
+      const attempt = () => {
+        const now = Date.now()
+        const quiet = now - last
+        if (quiet < 600) {
+          if (tail === 0) {
+            tail = window.setTimeout(() => { tail = 0; attempt() }, 600 - quiet)
+          }
+          return
+        }
+        last = now
+        const identity = scanAccountIdentity()
+        if (identity === undefined) return
+        adoptAccount(identity)
       }
       const observer = new MutationObserver(attempt)
       observer.observe(document.body, { childList: true, subtree: true })
       attempt()
-      return () => observer.disconnect()
+      return () => {
+        observer.disconnect()
+        if (tail !== 0) window.clearTimeout(tail)
+      }
     }
 
     /** Slot registration and dictionaries; no side effects outside `apply`. */
     function apply(ctx) {
+      const t = ctx.locale.bind(NS)
       ctx.effect(() => ctx.locale.register(NS, dictionaries), 'account-avatar: dictionaries')
+      // Before any paint: a signed-out launcher has to know what to call itself.
+      signedOutLabel = resolveSignedOutLabel(t)
       ctx.effect(() => watchAccountName(), 'account-avatar: account name watcher')
 
       // React re-renders the seat with the shipped name; put the custom one back.
@@ -1192,20 +1705,41 @@ window.__ModuleLoader__.load({
           if (timer !== 0) return
           timer = window.setTimeout(() => {
             timer = 0
+            // React may have replaced the seat node; the tag goes with it.
+            markLauncherSeat()
             paintLauncherName()
           }, 200)
         })
         observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+        // Signing in or out swaps the whole button, which is a childList change;
+        // reacting to it keeps 「未登录」 from waiting behind a name rewrite.
+        const signedOutWatcher = new MutationObserver(() => {
+          if (timer !== 0) return
+          timer = window.setTimeout(() => {
+            timer = 0
+            markLauncherSeat()
+            paintLauncherName()
+          }, 120)
+        })
+        for (const trigger of document.querySelectorAll('[aria-haspopup="menu"]')) {
+          signedOutWatcher.observe(trigger, { attributes: true, attributeFilter: ['data-signed-out'] })
+        }
         return () => {
           observer.disconnect()
+          signedOutWatcher.disconnect()
           if (timer !== 0) window.clearTimeout(timer)
         }
       }, 'account-avatar: launcher name guard')
 
-      accountLabel = readCachedAccount()
+      accountLabel = readCachedAccountLabel()
       pluginCtx = ctx
       // Seed from the cache so the seat label is right on a cold load.
       launcherName = readNameCache() !== '' ? readNameCache() : accountLabel
+      // The launcher may already be mounted; the observer only fires on change.
+      // A cold load renders the shell after this bundle applies, so poll briefly.
+      // The name is painted right after the seat exists, because the fast path
+      // looks the label up from that seat.
+      retryLauncherSeat(() => { paintLauncherName() })
 
       ctx.effect(() => {
         const tag = document.createElement('style')
@@ -1214,7 +1748,7 @@ window.__ModuleLoader__.load({
         paintTag = tag
 
         setAvatarPaint(readCache(), readShapeCache() ?? 'circle')
-        void fetchState().then((remote) => {
+        void readInitialState().then((remote) => {
           if (remote === undefined) return
           writeCache(remote.currentImage)
           writeShapeCache(remote.shape)
@@ -1228,7 +1762,6 @@ window.__ModuleLoader__.load({
         }
       }, 'account-avatar: launcher avatar paint')
 
-      const t = ctx.locale.bind(NS)
       ctx.slots.inject('settings.section', () => ctx.slots.register({
         name: 'settings.section',
         id: 'account-avatar',

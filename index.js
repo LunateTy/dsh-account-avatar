@@ -171,18 +171,27 @@ async function readBody(req) {
 
 /**
  * Register the avatar library and its routes.
+ *
+ * `webServer` is injected rather than read once: the desktop shell composes the
+ * listener during startup, so a plain `ctx.get('webServer')` in the plugin body
+ * can run before the service exists and would silently disable every route —
+ * which is exactly how a saved name turns into "could not save".
+ *
  * @param ctx - Host plugin context.
  */
 export function apply(ctx) {
-  const webServer = ctx.get('webServer')
-  const connection = ctx.get('connection')
+  ctx.inject(['webServer'], (webCtx) => {
+    registerRoutes(webCtx, webCtx.webServer)
+  })
+}
 
-  // The browser may be the desktop shell's IPC bridge instead; the client half
-  // keeps working from its local cache in that case.
-  if (webServer === undefined) {
-    console.info('[account-avatar] no web server in this composition; the browser keeps its local copy only')
-    return
-  }
+/**
+ * Mount the state, mutate and image routes on one web server.
+ * @param ctx - context that owns the effects, so reloading the plugin removes them.
+ * @param webServer - the listener these routes answer on.
+ */
+function registerRoutes(ctx, webServer) {
+  const connection = ctx.get('connection')
 
   /** Serialise mutations so two quick clicks cannot lose a picture. */
   let queue = Promise.resolve()
