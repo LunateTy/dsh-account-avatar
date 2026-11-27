@@ -1,157 +1,157 @@
 # dsh-account-avatar
 
 <p align="center">
-  🌐 <b>English</b> &nbsp;·&nbsp; <a href="README.zh.md">简体中文</a>
+  🌐 <a href="README.en.md">English</a> &nbsp;·&nbsp; <b>简体中文</b>
 </p>
 
-Replaces the avatar at the bottom of the DeepSeek Harness sidebar with a picture you upload, and lets you set your own nickname.
+把 DeepSeek Harness 左侧栏最下面那个头像换成可以自己上传的图像，并且可以自定义昵称。
 
-![Settings → Avatar, a picture pre-selected but not applied yet](assets/panel-1.png)
+![设置 → 头像，已预选一张但还没应用](assets/panel-1.png)
 
-## Why
+## 为什么做这个
 
-The sidebar shows whatever your DeepSeek account says. Sign in with WeChat, or bind WeChat to the account, and that is your WeChat profile picture — and while the account is signed in that way, DSH offers no separate avatar setting.
+左侧栏显示的是 DeepSeek 平台账号的头像。用微信登录、或者把微信绑在账号上的时候，那就是微信头像 —— 而且在微信登录状态下，DSH 里没有单独改头像的入口。
 
-DSH has no setting for this: the seat reads `AccountProfile.avatarUrl`, which is read-only, and the account service exposes no setter. This plugin paints your own picture and name over that one element, on this device only.
+DSH 本身不提供这个设置：那个位置读的是 `AccountProfile.avatarUrl`，只读，账号服务也没有任何写接口。这个插件只在自己这台设备上盖一层图和一个名字。
 
-## Install
+## 安装
 
 ```sh
 dsh plugin --profile web add dsh-account-avatar
 ```
 
-Until it is published to npm, install straight from a checkout:
+发布到 npm 之前，也可以直接从源码目录装：
 
 ```sh
 dsh plugin --profile web add /path/to/dsh-account-avatar
 ```
 
-Reload the page afterwards.
+装完刷新页面。
 
-## What you see in each account state
+## 三种账号状态下的表现
 
-The plugin paints over DSH's own avatar seat, so what it can show depends on what that seat currently is. DSH has three account states, and each behaves differently:
+这个插件要盖在 DSH 自己的头像位上，所以能显示什么，取决于那个位置当前是什么。DSH 的账号状态分三种，表现各不相同：
 
-| | Signed out | Signed in, no WeChat | Signed in with WeChat |
+| | 未登录 | 登录，未绑微信 | 登录，已绑微信 |
 |---|---|---|---|
-| **Sidebar avatar** | The plugin **inserts** a seat of its own and paints your picture | Your picture | Your picture |
-| **Sidebar name** | Always reads `Not signed in` | Your custom name, else the masked contact (`1XX******XX`) | Your custom name, else your WeChat nickname |
-| **With no picture uploaded** | Grey person icon | Grey person icon | **Your WeChat picture** |
-| **Settings first line** | `Not signed in` | Masked contact | WeChat nickname |
-| **The `@` line** | Hidden | **Hidden** | Shows `@nickname` |
+| **左下角头像** | 插件**自己插入**一个头像位，显示你上传的图 | 显示你上传的图 | 显示你上传的图 |
+| **左下角名字** | 常驻显示 `未登录` | 自定义名，或脱敏手机号（如 `1XX******XX`） | 自定义名，或微信昵称 |
+| **没上传图时** | 灰色人形图标 | 灰色人形图标 | **微信头像** |
+| **设置页第一行** | `未登录` | 脱敏手机号 | 微信昵称 |
+| **`@` 那一行** | 不显示 | **不显示** | 显示 `@昵称` |
 
-### Signed out
+### 未登录
 
-DSH renders no avatar element here at all — the button holds an ellipsis and a "More" label. The plugin appends a 24×24 seat (ordered first with `order:-1`, which leaves React's child indexes untouched) and hides the ellipsis.
+DSH 原本不会在这里渲染任何头像元素——按钮里只有一个省略号加「更多」。插件向按钮追加一个 24×24 的头像位（用 `order:-1` 排到最前，不破坏 React 的子节点索引），并隐藏那个省略号。
 
-- Avatar: your uploaded picture; the grey person icon when nothing is uploaded
-- Name: **always `Not signed in`**, never a name from the account that signed out
-- Both the picture and the name are kept, and come back when you sign in again
+- 头像：显示你上传的图；没上传就是灰色人形图标
+- 名字：**常驻显示 `未登录`**，不会显示上一个账号的名字
+- 头像和名字都照常保存，登录后会继续用
 
-### Signed in without WeChat
+### 登录但没有绑定微信
 
-Such an account has **no Platform nickname** (`id_profile` is `null`), so DSH itself falls back to the masked phone number.
+这种账号在 Platform 上**没有昵称**（`id_profile` 为 `null`），DSH 自己那行只能回退到脱敏手机号。
 
-- Avatar: your picture; the grey person icon when nothing is uploaded
-- Name: your custom name, else the masked contact
-- **No `@` line** — a masked number is not a nickname, and `@1XX******XX` is just noise
+- 头像：显示你上传的图；没上传就是灰色人形图标（DSH 原生行为）
+- 名字：你设的自定义名；没设就是脱敏手机号
+- **不显示 `@` 行**——脱敏号码不是昵称，`@1XX******XX` 只是噪声
 
-### Signed in with WeChat
+### 登录并绑定了微信
 
-Platform returns both the nickname and the picture.
+Platform 会返回微信昵称和头像。
 
-- Avatar: your picture; **your WeChat picture** when nothing is uploaded — which is the reason this plugin exists
-- Name: your custom name, else the WeChat nickname
-- The `@nickname` line appears
+- 头像：显示你上传的图；没上传就是**你的微信头像**（这就是做这个插件的原因）
+- 名字：你设的自定义名；没设就是微信昵称
+- 显示 `@昵称` 那一行，标明这个账号本身叫什么
 
-On an account switch the plugin fingerprints the identity by its masked contact, so the cache is dropped and the previous account's name never lingers in the sidebar.
+换账号时，插件用「脱敏联系方式」做指纹来识别身份变化，缓存会自动失效，不会把上一个账号的名字留在侧栏。
 
-## Use
+## 使用
 
-Open **Settings** (`Ctrl+Alt+,`, or click the sidebar avatar → Settings) → **Avatar**.
+打开 **设置**（`Ctrl+Alt+,`，或点左下角头像 → 设置）→ 左侧选 **头像**。
 
-### Change the picture
+### 换头像
 
-1. **Upload** — PNG, JPEG, WebP or GIF, up to 12 MB
-2. Drag to reposition, scroll or use the slider to zoom
-3. **Save**
+1. 点 **上传** → 选一张 PNG / JPEG / WebP / GIF（12 MB 以内）
+2. 在弹出的窗口里拖动定位、滚轮或滑块缩放
+3. 点 **保存**
 
-The picture is stored as 256×256 and processed on this device only.
+图片会存成 256×256，只在这台设备上处理。
 
-### History
+### 历史头像
 
-Every save is kept, up to **100** pictures:
+每次保存都会进历史，最多留 **100 张**：
 
-- Click a thumbnail to **pre-select** it: the right-hand preview switches immediately, the left preview and the sidebar do **not** change
-- Click **Apply** under the left preview to actually use it
-- Solid blue ring = in use, dashed blue ring = pre-selected
-- Past 100, the **oldest** entry is dropped; the one in use is never dropped
+- 点任意一张 = **预选**：右侧「侧栏效果」立刻变成那张，**左侧和左下角不动**
+- 点左侧头像下面的 **应用** = 真正换上（左侧、右侧、左下角一起变）
+- 正在用的那张是实心蓝框，预选的那张是虚线蓝框
+- 存满 100 张后再存，会顶掉**最旧**的一张；当前那张永远不会被顶掉
 
-![A pre-selected entry: the right preview shows it, the caption reads "not applied yet"](assets/panel-2.png)
+![预选状态：右侧预览已切换，标注「待应用」](assets/panel-2.png)
 
-### Bulk actions
+### 批量操作
 
-**Bulk actions** in the history header enters selection mode:
+点历史区右上角的 **批量操作** 进入选择模式：
 
-- Each thumbnail gets a check circle
-- **Select all** / **Delete selected (n)** / **Cancel**
-- Deleting the entry in use falls back to the newest remaining one; delete them all and the account picture comes back
+- 每张缩略图右上角出现勾选圆圈
+- **全选** / **删除选中 (n)** / **取消**
+- 删掉的如果包含正在用的那张，会自动退到剩下的最新一张；全删光就回到账号头像
 
-![Selection mode with two entries checked and "Delete selected (2)" ready](assets/panel-3.png)
+![选择模式：勾了两张，删除按钮显示数量](assets/panel-3.png)
 
-### Shape
+### 头像形状
 
-Three options, applied globally to the sidebar avatar and the right preview (history thumbnails stay rounded squares):
+三个选项，全局生效，作用于左下角头像和右侧预览（历史缩略图固定圆角方块，不受影响）：
 
-| Shape | Radius |
+| 形状 | 圆角 |
 |---|---|
-| Circle | 50% |
-| Rounded | 26% |
-| Square | 10% |
+| 圆形 | 50% |
+| 圆角方形 | 26% |
+| 方形 | 10% |
 
-Circle by default, matching the shipped look.
+默认圆形，跟原生一致。
 
-### Name
+### 名字
 
-The first line is your name — **click it to edit**:
+第一行是名字，**点一下就能改**：
 
-- The default follows the account state (see the table above): WeChat nickname, masked contact, or `Not signed in`
-- Enter or blur saves, Esc cancels, 24 characters max
-- Clearing it falls back to that same default
-- The sidebar label follows whatever is shown here
-- The name lives in **this browser**, never in the account
+- 默认值跟着账号状态走（见上面的三种状态表）：微信昵称、脱敏手机号，或未登录时的 `未登录`
+- 回车或点别处保存，Esc 取消，最长 24 字
+- 清空则回落到上面的默认值
+- 改完会同步显示在左下角头像旁边
+- 名字存在**本机浏览器**里，不进账号、不上传
 
-If another plugin (Claude Style, for instance) also rewrites that label, Settings shows an amber warning next to the name and this plugin steps aside instead of fighting — two plugins repainting the same node every 200 ms just makes the text flicker.
+如果别的插件（比如 Claude Style）也在改那个位置的名字，设置页会在名字右边出现橙色提示，并且本插件会让位，不再跟它抢 —— 否则两个插件每 200ms 来回覆盖会让文字闪烁。
 
-## Where it is stored
+## 存放位置
 
-Pictures and names stay on this machine; nothing is uploaded anywhere.
+图片和名字都只在这台设备上，不上传任何服务器。
 
-**Two stores, chosen by what the shell can do:**
+**存两份，按外壳能力自动选：**
 
-- **Host library** — `$DSH_HOME/account-avatar/avatars.json` (up to 100 pictures). The Host half reads and writes it through `GET/POST /account-avatar/api/state|mutate` plus `GET /account-avatar/api/image`, all passing the same `connection.requestRejection` check the shipped loopback routes use. Used **only when the shell actually mounts HTTP routes.**
-- **Browser library** — `localStorage['dsh.account-avatar.library.v1']`. Desktop loads the UI over its own `dsh-app:` scheme, where a relative `/api/...` request has no handler; uploads then **fall back here automatically** with the same features.
+- **Host 图库** —— `$DSH_HOME/account-avatar/avatars.json`（最多 100 张），由 Host 半边通过 `GET/POST /account-avatar/api/state|mutate` 和 `GET /account-avatar/api/image` 读写，三条路由都过了和官方本机路由同一套 `connection.requestRejection` 检查。**仅当外壳确实挂了 HTTP 路由时使用。**
+- **浏览器图库** —— `localStorage['dsh.account-avatar.library.v1']`。桌面端用自定义 `dsh-app:` 协议加载界面，相对路径的 `/api/...` 请求没有处理器，此时上传会**自动落到这里**，功能完全一样。
 
-The Host routes are probed once at startup: reachable means the Host library, unreachable means the browser library, and the page behaves identically either way.
+启动时探测一次 Host 路由：能通就用 Host 图库，不能通就用浏览器图库，页面上的操作和表现没有区别。
 
-**Other browser copies (so the first painted frame is already right):**
+**浏览器里的其他副本（首帧就画对，避免先闪一下原生头像）：**
 
-- `localStorage['dsh.account-avatar.v2']` — the current picture
-- `localStorage['dsh.account-avatar.shape.v2']` — the shape
-- `localStorage['dsh.account-avatar.name.v1']` — the custom name
-- `localStorage['dsh.account-avatar.account.v2']` — cached account identity (name plus masked contact)
+- `localStorage['dsh.account-avatar.v2']` —— 当前那张
+- `localStorage['dsh.account-avatar.shape.v2']` —— 形状
+- `localStorage['dsh.account-avatar.name.v1']` —— 自定义名字
+- `localStorage['dsh.account-avatar.account.v2']` —— 账号身份缓存（名字 + 脱敏联系方式）
 
-Each picture is kept twice: a 256×256 original (for display, usually 20–60 KB) and a 96×96 thumbnail (for the list, about 4 KB), so opening Settings does not pull the whole library.
+每张图存两份：256×256 原图（显示用，通常 20–60 KB）和 96×96 缩略图（历史列表用，约 4 KB），所以打开设置不用把整库原图都拉下来。
 
-A single-picture `avatar.json` from the first version is migrated into the history on first read.
+旧版本的单张 `avatar.json` 会在第一次读取时自动迁移成历史里的第一张。
 
-## Limitations
+## 已知限制
 
-- The avatar is repainted by one stylesheet keyed on the shipped `[data-avatar-status]` marker, or on a `data-ast-avatar` tag this plugin adds when that marker is absent — an account that never uploaded a picture renders the marker-less path, and the tag is what makes the replacement work there too. If a DSH release changes the launcher markup (a menu trigger no longer carrying `aria-haspopup`, or a seat that is no longer a square icon-bearing span), the tag cannot be placed and the replacement stops applying — nothing breaks, the native picture simply shows again.
-- The name is written into the seat's text node. If the shipped markup changes, or another plugin writes the same node, it falls back to the native name (Settings shows a warning).
-- With the browser library, clearing site data or switching browsers loses the pictures and the name; the Host library survives both.
-- Local personalisation only: your DeepSeek account is untouched, so other people, browsers and machines still see the account picture and name.
+- 头像靠一条作用在官方 `[data-avatar-status]` 标记（或插件自己打的 `data-ast-avatar` 标记）上的样式重绘。如果某个 DSH 版本改了账号菜单结构，替换会失效 —— 不会报错，只是又显示回原生头像。
+- 名字靠改写账号位里的文本节点。原生结构变了、或者有其他插件也在写同一个位置时，会退化成显示原生名字（设置页会有提示）。
+- 用浏览器图库时，清浏览器缓存或换浏览器会丢图和名字；用 Host 图库时不会。
+- 纯本机个人化：DeepSeek 账号完全没动，别人、别的浏览器、别的机器看到的仍是账号头像和账号名。
 
-## License
+## 许可
 
 MIT

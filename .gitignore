@@ -5,3 +5,6 @@ Thumbs.db
 
 # Raw captures; assets/crop-screenshots.py regenerates the committed panels.
 assets/screenshot-*.png
+
+# Working notes for the maintainer, not part of the published plugin.
+TODO.md
