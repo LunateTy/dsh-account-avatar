@@ -3,10 +3,29 @@
       return value < min ? min : value > max ? max : value
     }
 
+    /**
+     * Whether a stored value is a picture this plugin produced.
+     *
+     * The same rule the Host applies, reused here because these values do not
+     * only get rendered — they are interpolated into a stylesheet. A prefix test
+     * (`startsWith('data:image/')`) would let a value containing a quote break
+     * out of `url("…")` and inject rules, and every DSH plugin shares this
+     * origin's localStorage, so any of them could plant one. Matching the exact
+     * character set instead means there is nothing to escape.
+     *
+     * @param value - the candidate string.
+     * @param maxChars - largest accepted length.
+     * @returns whether the value is a base64 data URL of an allowed image type.
+     */
+    const STORED_IMAGE = /^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/
+    function isStoredImage(value, maxChars = MAX_IMAGE_CHARS) {
+      return typeof value === 'string' && value.length <= maxChars && STORED_IMAGE.test(value)
+    }
+
     function readCache() {
       try {
         const value = window.localStorage.getItem(CACHE_KEY)
-        return typeof value === 'string' && value.startsWith('data:image/') ? value : null
+        return isStoredImage(value) ? value : null
       } catch {
         return null
       }
@@ -44,13 +63,17 @@
       return {
         shape: SHAPE_ORDER.includes(payload.shape) ? payload.shape : 'circle',
         currentId: typeof payload.currentId === 'string' ? payload.currentId : null,
-        currentImage: typeof payload.currentImage === 'string' ? payload.currentImage : null,
+        // Every picture the UI will paint passes through here, whichever side
+        // produced it, so this is where a value that is not one of ours stops.
+        // A failed value becomes "no picture" rather than reaching a stylesheet.
+        currentImage: isStoredImage(payload.currentImage) ? payload.currentImage : null,
         displayName: typeof payload.displayName === 'string' ? payload.displayName.slice(0, MAX_NAME_CHARS) : '',
         thumbVersion: Number.isInteger(payload.thumbVersion) ? payload.thumbVersion : 1,
         count: Number.isFinite(payload.count) ? payload.count : 0,
         max: Number.isFinite(payload.max) ? payload.max : 100,
         items: Array.isArray(payload.items)
-          ? payload.items.filter((item) => item !== null && typeof item === 'object' && typeof item.id === 'string' && typeof item.thumb === 'string')
+          ? payload.items.filter((item) => item !== null && typeof item === 'object'
+            && typeof item.id === 'string' && isStoredImage(item.thumb))
           : [],
       }
     }
@@ -116,14 +139,30 @@
         const raw = window.localStorage.getItem(LOCAL_LIBRARY_KEY)
         if (typeof raw !== 'string' || raw === '') return { shape: 'circle', currentId: null, displayName: '', items: [] }
         const parsed = JSON.parse(raw)
+        const items = Array.isArray(parsed?.items)
+          ? parsed.items
+            .filter((item) => item !== null && typeof item === 'object'
+              && typeof item.id === 'string' && item.id !== ''
+              && isStoredImage(item.image))
+            // Every picture is rewritten through the same validator, so nothing
+            // reaching a stylesheet depends on what storage happened to hold. A
+            // thumbnail that fails is replaced by its own full picture, which
+            // already passed.
+            .map((item) => ({
+              id: item.id,
+              image: item.image,
+              thumb: isStoredImage(item.thumb) ? item.thumb : item.image,
+              createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date(0).toISOString(),
+            }))
+          : []
+        const currentId = typeof parsed?.currentId === 'string' && items.some((item) => item.id === parsed.currentId)
+          ? parsed.currentId
+          : null
         return {
           shape: SHAPE_ORDER.includes(parsed?.shape) ? parsed.shape : 'circle',
-          currentId: typeof parsed?.currentId === 'string' ? parsed.currentId : null,
-          displayName: typeof parsed?.displayName === 'string' ? parsed.displayName : '',
-          items: Array.isArray(parsed?.items)
-            ? parsed.items.filter((item) => item !== null && typeof item === 'object'
-              && typeof item.id === 'string' && typeof item.image === 'string')
-            : [],
+          currentId,
+          displayName: typeof parsed?.displayName === 'string' ? parsed.displayName.slice(0, MAX_NAME_CHARS) : '',
+          items,
         }
       } catch {
         return { shape: 'circle', currentId: null, displayName: '', items: [] }
@@ -169,13 +208,13 @@
     function mutateLocal(op, payload) {
       const library = readLocalLibrary()
       if (op === 'add') {
-        const image = typeof payload.image === 'string' ? payload.image : ''
+        const image = isStoredImage(payload.image) ? payload.image : ''
         if (image === '') return { ok: false, error: 'missing-image' }
         const id = `l${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
         library.items.push({
           id,
           image,
-          thumb: typeof payload.thumb === 'string' ? payload.thumb : image,
+          thumb: isStoredImage(payload.thumb) ? payload.thumb : image,
         })
         // Cap at 100 without ever dropping the entry currently in use.
         while (library.items.length > 100) {
@@ -278,7 +317,9 @@
         })
         if (!response.ok) return null
         const payload = await response.json()
-        return typeof payload?.image === 'string' && payload.image.startsWith('data:image/') ? payload.image : null
+        // Same rule as everywhere else: a picture that is not one of ours is
+        // treated as absent rather than handed to the renderer.
+        return isStoredImage(payload?.image) ? payload.image : null
       } catch {
         return null
       }

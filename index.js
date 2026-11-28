@@ -130,9 +130,15 @@ async function readLibrary() {
 /** Replace the library file through one atomic rename. */
 async function writeLibrary(library) {
   const path = libraryPath()
-  await mkdir(dirname(path), { recursive: true })
+  // Owner-only. The library holds pictures and a custom name, which is nobody
+  // else's business on a shared Unix host; a default umask would leave the
+  // directory at 0755 and the file at 0644. Windows ignores these bits and
+  // inherits the user-directory ACL instead.
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const temporary = `${path}.${process.pid}.tmp`
-  await writeFile(temporary, JSON.stringify(library), 'utf8')
+  // The rename below replaces any previous file, so each write also tightens the
+  // permissions of a library created before this mode was set.
+  await writeFile(temporary, JSON.stringify(library), { encoding: 'utf8', mode: 0o600 })
   await rename(temporary, path)
 }
 
@@ -193,6 +199,36 @@ export function apply(ctx) {
 }
 
 /**
+ * Classify one request against the connection's trust check.
+ *
+ * Fails closed. The Host webserver hands every request straight to the route
+ * handler with no authentication of its own — `register(route)` stores the route
+ * and nothing more — so this verdict is the only thing between the library and
+ * whoever can reach the port. A checker that is absent, of the wrong shape, or
+ * throwing leaves the caller unverified, and an unverified caller is refused.
+ *
+ * Pulled out of the route closure so `test/host.test.mjs` can pin the behaviour
+ * without a live server.
+ *
+ * @param connection - the `connection` service, or whatever `ctx.get` returned.
+ * @param req - the incoming request.
+ * @returns the status code to answer with, or `null` when the request may proceed.
+ */
+export function admissionVerdict(connection, req) {
+  if (connection === undefined || connection === null) return 503
+  if (typeof connection.requestRejection !== 'function') return 503
+  let rejection
+  try {
+    rejection = connection.requestRejection(req)
+  } catch {
+    return 503
+  }
+  // A checker that ran and returned nothing is an explicit admission.
+  if (rejection === undefined || rejection === null || rejection === false) return null
+  return typeof rejection === 'number' ? rejection : 403
+}
+
+/**
  * Mount the state, mutate and image routes on one web server.
  * @param ctx - context that owns the effects, so reloading the plugin removes them.
  * @param webServer - the listener these routes answer on.
@@ -208,16 +244,11 @@ function registerRoutes(ctx, webServer) {
     return next
   }
 
-  /** Mirror the trust check other loopback routes use; a rejection is a status code. */
+  /** Refuse the request when the verdict says so. @returns whether it was refused. */
   const rejected = (req, res) => {
-    let rejection
-    try {
-      rejection = connection?.requestRejection?.(req)
-    } catch {
-      rejection = undefined
-    }
-    if (rejection === undefined || rejection === null || rejection === false) return false
-    res.statusCode = typeof rejection === 'number' ? rejection : 403
+    const verdict = admissionVerdict(connection, req)
+    if (verdict === null) return false
+    res.statusCode = verdict
     res.end()
     return true
   }
@@ -408,8 +439,10 @@ function registerRoutes(ctx, webServer) {
   ctx.effect(() => webServer.register(imageRoute), `account-avatar: GET ${IMAGE_ROUTE}`)
 }
 
-// The three pure functions below carry the library's actual rules — which stored
-// records survive a read, what the browser is told about them, and which strings
-// count as pictures. Exported so `test/host.test.mjs` can check them without a
-// Harness context or a filesystem; the plugin entry point is still `apply`.
-export { isImage, normaliseLibrary, toState }
+// The functions below carry rules that are easy to break silently: which stored
+// records survive a read, what the browser is told about them, which strings
+// count as pictures, whether a request is allowed to touch anything at all, and
+// how tightly the library file is written. Exported so `test/host.test.mjs` can
+// check them without a Harness context or a live server; the plugin entry point
+// is still `apply`.
+export { isImage, libraryPath, normaliseLibrary, toState, writeLibrary }

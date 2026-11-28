@@ -22,6 +22,13 @@
     const OUTPUT = 256
     const THUMB = 96
     const MAX_FILE_BYTES = 12 * 1024 * 1024
+    /**
+     * Largest stored data URL accepted from storage.
+     *
+     * Matches the Host's own cap. A 256×256 WebP at quality 0.92 lands in the
+     * tens of kilobytes, so this only ever rejects a value something else wrote.
+     */
+    const MAX_IMAGE_CHARS = 2 * 1024 * 1024
     const MAX_NAME_CHARS = 24
 
     /** The signed-in account's label, shown as `@handle` under the custom name. */

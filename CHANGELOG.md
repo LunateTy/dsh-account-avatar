@@ -48,6 +48,30 @@ anyone who ran the earlier build from source.
 - Switching accounts no longer keeps the previous account's name in the sidebar;
   identity is cached by masked contact instead of by name alone.
 
+### Security
+
+From an external review of `29fc3dd`. Three findings, all fixed here.
+
+- **The Host routes failed open.** `rejected()` treated a missing or throwing
+  `connection.requestRejection` as permission to continue, and the Host
+  webserver calls route handlers without authenticating anything itself — so
+  that check was the only barrier. A checker that cannot run now answers **503**
+  instead of admitting the request. `test/` covers the library rules; the
+  fixtures cover the painting path.
+- **Stored pictures were trusted by prefix.** Values read from `localStorage`
+  were only checked for `data:image/` before being interpolated into a
+  stylesheet, so a value containing a quote could close `url("…")` and append
+  rules. Every plugin on this origin shares that storage, so any of them could
+  plant one. Values now match the exact base64 character set the Host already
+  enforced, in one `isStoredImage` used by the cache, the local library, the
+  Host response, and the painting path. `tampered-storage.html` runs the clean
+  and hostile cases as a pair, and fails against the unfixed build.
+- **The library file inherited the umask.** On a shared Unix host that left
+  `avatars.json` at 0644 — readable by other local users. The directory is now
+  created `0700` and each write `0600`; because the write replaces the file,
+  an existing library is tightened on its next save. Windows ignores these bits
+  and uses the user-directory ACL.
+
 ## [0.1.0] — 2026-11-26
 
 Local-only build, never published.

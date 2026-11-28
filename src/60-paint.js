@@ -7,7 +7,12 @@
       if (paintTag === null) return
       const radius = SHAPE_RADIUS[SHAPE_ORDER.includes(shape) ? shape : 'circle']
       const rules = [`:root{--ast-radius:${radius}}`]
-      if (typeof image === 'string' && image.startsWith('data:image/')) {
+      // This value is interpolated into a stylesheet, so it must be one this
+      // plugin produced. `isStoredImage` matches an exact base64 character set,
+      // which contains no quote, paren or semicolon — there is nothing left that
+      // could close `url("…")` and start a rule of its own. A value that fails
+      // is treated as no picture at all and the default avatar shows through.
+      if (isStoredImage(image)) {
         rules.push([
           `${AVATAR_SELECTOR}{`,
           `background-image:url("${image}")!important;`,

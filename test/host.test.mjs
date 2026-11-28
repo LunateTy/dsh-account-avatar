@@ -8,8 +8,11 @@
 // Run with `npm test` (node --test, no dependencies).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm, stat, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
-import { isImage, normaliseLibrary, toState } from '../index.js'
+import { admissionVerdict, isImage, libraryPath, normaliseLibrary, toState, writeLibrary } from '../index.js'
 
 // A data URL that passes the format check without carrying real bytes.
 const png = (marker = 'A') => `data:image/png;base64,${marker.repeat(8)}`
@@ -165,4 +168,104 @@ test('toState survives a library with no display name or thumb version', () => {
   const state = toState({ ...library(), displayName: undefined, thumbVersion: undefined })
   assert.equal(state.displayName, '')
   assert.equal(state.thumbVersion, 1, 'missing thumb version falls back to 1')
+})
+
+// --- admissionVerdict ------------------------------------------------------
+//
+// The Host webserver runs no authentication of its own, so this verdict is the
+// only thing standing between the library and the network. Every case below that
+// returns a number would, before the fix, have returned `null` and let the
+// request through.
+
+const req = { url: '/account-avatar/api/state', headers: {} }
+
+test('an absent connection is refused, not trusted', () => {
+  assert.equal(admissionVerdict(undefined, req), 503)
+  assert.equal(admissionVerdict(null, req), 503)
+})
+
+test('a connection without the checker is refused', () => {
+  assert.equal(admissionVerdict({}, req), 503)
+  assert.equal(admissionVerdict({ requestRejection: 'not a function' }, req), 503)
+  assert.equal(admissionVerdict({ requestRejection: null }, req), 503)
+})
+
+test('a checker that throws is refused', () => {
+  const throwing = { requestRejection() { throw new Error('peer table unavailable') } }
+  assert.equal(admissionVerdict(throwing, req), 503)
+})
+
+test('a rejection from the checker is passed through', () => {
+  assert.equal(admissionVerdict({ requestRejection: () => 401 }, req), 401)
+  assert.equal(admissionVerdict({ requestRejection: () => 403 }, req), 403)
+  assert.equal(admissionVerdict({ requestRejection: () => 429 }, req), 429)
+})
+
+test('a non-numeric rejection becomes 403 rather than slipping through', () => {
+  assert.equal(admissionVerdict({ requestRejection: () => 'no' }, req), 403)
+  assert.equal(admissionVerdict({ requestRejection: () => true }, req), 403)
+  assert.equal(admissionVerdict({ requestRejection: () => ({ peer: 1 }) }, req), 403)
+})
+
+test('only an explicit empty rejection admits the request', () => {
+  assert.equal(admissionVerdict({ requestRejection: () => undefined }, req), null)
+  assert.equal(admissionVerdict({ requestRejection: () => null }, req), null)
+  assert.equal(admissionVerdict({ requestRejection: () => false }, req), null)
+})
+
+// --- writeLibrary ----------------------------------------------------------
+//
+// Pictures and a custom name are nobody else's business on a shared Unix host.
+// Windows ignores the mode bits and inherits the user-directory ACL, so the
+// permission assertions are POSIX-only; the write itself is checked everywhere.
+
+const posix = process.platform !== 'win32'
+
+async function withStoreHome(run) {
+  const home = await mkdtemp(join(tmpdir(), 'ast-test-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    return await run(home)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+    await rm(home, { recursive: true, force: true })
+  }
+}
+
+test('writeLibrary creates the directory and the file', async () => {
+  await withStoreHome(async () => {
+    await writeLibrary(library({ items: [item('a')] }))
+    const stored = JSON.parse(await readFile(libraryPath(), 'utf8'))
+    assert.equal(stored.items.length, 1)
+  })
+})
+
+test('the store directory is owner-only', { skip: !posix && 'POSIX mode bits' }, async () => {
+  await withStoreHome(async () => {
+    await writeLibrary(library())
+    const mode = (await stat(dirname(libraryPath()))).mode & 0o777
+    assert.equal(mode, 0o700, `directory is ${mode.toString(8)}`)
+  })
+})
+
+test('the library file is owner-only', { skip: !posix && 'POSIX mode bits' }, async () => {
+  await withStoreHome(async () => {
+    await writeLibrary(library())
+    const mode = (await stat(libraryPath())).mode & 0o777
+    assert.equal(mode, 0o600, `file is ${mode.toString(8)}`)
+  })
+})
+
+test('an existing world-readable library is tightened by the next write', { skip: !posix && 'POSIX mode bits' }, async () => {
+  await withStoreHome(async () => {
+    // A file left behind by an earlier version, written with the default umask.
+    await mkdir(dirname(libraryPath()), { recursive: true })
+    await writeFile(libraryPath(), '{}', { mode: 0o644 })
+    assert.equal((await stat(libraryPath())).mode & 0o777, 0o644, 'precondition')
+
+    await writeLibrary(library())
+    assert.equal((await stat(libraryPath())).mode & 0o777, 0o600, 'tightened on save')
+  })
 })

@@ -134,6 +134,15 @@ Pictures and names stay on this machine; nothing is uploaded anywhere.
 
 The Host routes are probed once at startup: reachable means the Host library, unreachable means the browser library, and the page behaves identically either way.
 
+**Who can see it.** Both stores are scoped to the **DSH profile**, not to the
+account signed in to DSH. Signing in as someone else shows the same history, and
+any browser authorised to reach this Host can read it through those routes — the
+routes are authenticated, but they answer for the profile rather than for one
+account. Nothing leaves the machine. If that distinction matters, delete the
+history before handing the machine or the profile to someone else; **Reset to
+default** clears the picture in use, and the browser library can be cleared
+under Settings.
+
 **Other browser copies (so the first painted frame is already right):**
 
 - `localStorage['dsh.account-avatar.v2']` — the current picture
