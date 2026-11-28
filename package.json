@@ -1,6 +1,6 @@
 {
     "name":  "dsh-account-avatar",
-    "version":  "0.2.0",
+    "version":  "0.2.1",
     "type":  "module",
     "description":  "Replaces the sidebar account avatar with your own picture and name: upload, crop, keep a history of up to 100, pick a shape. Stored on this machine; the account menu, sign-in and notifications stay untouched.",
     "license":  "MIT",

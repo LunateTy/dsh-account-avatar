@@ -4,11 +4,17 @@ Notable changes to this plugin. Versions follow [semantic versioning](https://se
 while the major version is 0, a minor bump may still change stored data, and those
 changes are called out under **Changed**.
 
-## [0.2.0] — 2026-11-27
+## [0.2.1] — 2026-11-28
 
-The first version published to npm. 0.1.0 existed only as a local checkout, so
-there is no upgrade path from the registry; this entry records what changed for
-anyone who ran the earlier build from source.
+The first version that stays on the registry. `0.2.0` was published and withdrawn
+within the hour — its `maintainers` field carried the author's real mailbox, and
+npm publishes the account address there by design. npm does not release a version
+number when a package is unpublished, so this one took a new number rather than
+reuse the old. Nothing about the plugin changed in the republish; the sections
+below are the whole of what 0.2.1 contains.
+
+0.1.0 existed only as a local checkout, so there is no upgrade path from the
+registry — these notes exist for anyone who ran the earlier build from source.
 
 ### Added
 
@@ -71,6 +77,12 @@ From an external review of `29fc3dd`. Three findings, all fixed here.
   created `0700` and each write `0600`; because the write replaces the file,
   an existing library is tightened on its next save. Windows ignores these bits
   and uses the user-directory ACL.
+
+## [0.2.0] — 2026-11-27 (withdrawn)
+
+Published and removed the same evening. The `maintainers` field carried a real
+mailbox, so the package was unpublished rather than left up; no install of this
+version survives, and npm will not accept the number again.
 
 ## [0.1.0] — 2026-11-26
 
